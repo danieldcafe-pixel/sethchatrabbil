@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Chat — RabbiShlomo67</title>
+<style>
+  :root{
+    --bg-chat: #EFEAE1;
+    --header: #1C2B33;
+    --header-text: #F4F1EA;
+    --sent: #3E6259;
+    --sent-text: #F4F1EA;
+    --received: #FFFFFF;
+    --received-border: #E1DCD1;
+    --text-dark: #22262B;
+    --text-muted: #7A7468;
+    --gold: #B08D3E;
+    --divider-bg: rgba(28,43,51,0.06);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+
+  html,body{
+    width:100%; height:100%;
+    background:#000;
+    overflow:hidden;
+    font-family: -apple-system, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .phone-screen{
+    position:relative;
+    width:390px;
+    height:844px;
+    margin:0 auto;
+    background:var(--bg-chat);
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* subtle collectors'-world watermark: faint hexagram tile */
+  .phone-screen::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    opacity:0.035;
+    background-image:
+      linear-gradient(30deg, var(--header) 12%, transparent 12.5%, transparent 87%, var(--header) 87.5%, var(--header)),
+      linear-gradient(150deg, var(--header) 12%, transparent 12.5%, transparent 87%, var(--header) 87.5%, var(--header)),
+      linear-gradient(30deg, var(--header) 12%, transparent 12.5%, transparent 87%, var(--header) 87.5%, var(--header)),
+      linear-gradient(150deg, var(--header) 12%, transparent 12.5%, transparent 87%, var(--header) 87.5%, var(--header));
+    background-size: 52px 90px;
+    background-position: 0 0, 0 0, 26px 45px, 26px 45px;
+    z-index:0;
+  }
+
+  /* ---------- status bar ---------- */
+  .status-bar{
+    position:relative;
+    z-index:2;
+    height:47px;
+    flex-shrink:0;
+    background:var(--header);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 22px;
+    color:var(--header-text);
+    font-size:15px;
+    font-weight:600;
+    letter-spacing:0.2px;
+  }
+  .status-icons{ display:flex; align-items:center; gap:6px; }
+  .signal-bars{ display:flex; align-items:flex-end; gap:2px; height:11px; }
+  .signal-bars span{ width:3px; background:var(--header-text); border-radius:1px; }
+  .signal-bars span:nth-child(1){ height:4px; }
+  .signal-bars span:nth-child(2){ height:6px; }
+  .signal-bars span:nth-child(3){ height:8px; }
+  .signal-bars span:nth-child(4){ height:11px; }
+  .battery{
+    width:24px; height:11px;
+    border:1.4px solid var(--header-text);
+    border-radius:3px;
+    position:relative;
+    display:flex;
+    align-items:center;
+    padding:1.5px;
+  }
+  .battery::after{
+    content:"";
+    position:absolute;
+    right:-4px; top:3px;
+    width:2.5px; height:5px;
+    background:var(--header-text);
+    border-radius:0 2px 2px 0;
+  }
+  .battery i{ display:block; width:70%; height:100%; background:var(--header-text); border-radius:1px; }
+
+  /* ---------- chat header ---------- */
+  .chat-header{
+    position:relative;
+    z-index:2;
+    background:var(--header);
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:10px 14px 14px 8px;
+  }
+  .back-arrow{
+    width:26px; height:26px;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--header-text);
+  }
+  .back-arrow svg{ width:13px; height:22px; }
+
+  .avatar{
+    width:38px; height:38px;
+    border-radius:50%;
+    background:linear-gradient(160deg, var(--gold), #7c611f);
+    display:flex; align-items:center; justify-content:center;
+    color:#F4F1EA;
+    font-weight:700;
+    font-size:16px;
+    flex-shrink:0;
+  }
+
+  .header-id{ flex:1; min-width:0; }
+  .header-name{
+    color:var(--header-text);
+    font-size:16.5px;
+    font-weight:600;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .header-status{
+    color:var(--gold);
+    font-size:12.5px;
+    margin-top:1px;
+    letter-spacing:0.1px;
+  }
+
+  .header-actions{ display:flex; align-items:center; gap:20px; padding-right:4px; }
+  .header-actions svg{ width:21px; height:21px; color:var(--header-text); }
+
+  /* ---------- chat body ---------- */
+  .chat-body{
+    position:relative;
+    z-index:1;
+    flex:1;
+    padding:14px 12px 10px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .date-divider{
+    align-self:center;
+    background:var(--divider-bg);
+    color:var(--text-muted);
+    font-size:11.5px;
+    font-weight:600;
+    letter-spacing:0.3px;
+    text-transform:uppercase;
+    padding:5px 12px;
+    border-radius:8px;
+    margin-bottom:18px;
+  }
+
+  .row{ display:flex; margin-bottom:6px; }
+  .row.in{ justify-content:flex-start; }
+  .row.out{ justify-content:flex-end; }
+
+  .bubble{
+    max-width:76%;
+    padding:9px 11px 8px 12px;
+    font-size:15px;
+    line-height:1.36;
+    position:relative;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.06);
+  }
+
+  .bubble.received{
+    background:var(--received);
+    border:1px solid var(--received-border);
+    color:var(--text-dark);
+    border-radius:4px 14px 14px 14px;
+  }
+
+  .bubble.sent{
+    background:var(--sent);
+    color:var(--sent-text);
+    border-radius:14px 4px 14px 14px;
+  }
+
+  .bubble .meta{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:4px;
+    margin-top:4px;
+    font-size:10.5px;
+  }
+  .bubble.received .meta{ color:var(--text-muted); }
+  .bubble.sent .meta{ color:rgba(244,241,234,0.75); }
+
+  .checks{ display:inline-flex; }
+  .checks svg{ width:15px; height:10px; }
+
+  .bubble.photo{
+    padding:5px;
+    background:var(--received);
+    border:1px solid var(--received-border);
+  }
+  .photo-frame{
+    position:relative;
+    width:210px;
+    height:210px;
+    border-radius:10px;
+    overflow:hidden;
+    background:#EDEAE3;
+    touch-action:none;
+  }
+  .photo-frame svg{ width:100%; height:100%; display:block; }
+  .img-meta{
+    position:relative;
+    z-index:2;
+    position:absolute;
+    bottom:6px; right:8px;
+    background:rgba(20,20,18,0.5);
+    color:#F4F1EA;
+    font-size:10.5px;
+    padding:2px 7px;
+    border-radius:8px;
+    letter-spacing:0.1px;
+  }
+  #towerPhotoImg{
+    width:100%; height:100%;
+    object-fit:cover;
+    display:block;
+  }
+  .photo-hint{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--text-muted);
+    font-size:12.5px;
+    font-weight:600;
+    background:rgba(0,0,0,0.03);
+    pointer-events:none;
+  }
+
+  /* ---------- input bar ---------- */
+  .input-bar{
+    position:relative;
+    z-index:2;
+    flex-shrink:0;
+    background:var(--bg-chat);
+    border-top:1px solid rgba(28,43,51,0.08);
+    padding:8px 10px 22px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .input-pill{
+    flex:1;
+    background:var(--received);
+    border:1px solid var(--received-border);
+    border-radius:20px;
+    padding:9px 14px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .input-pill svg{ width:19px; height:19px; color:var(--text-muted); flex-shrink:0; }
+  .input-placeholder{ color:var(--text-muted); font-size:15px; }
+  .composer-draft{ color:var(--text-dark); font-size:15px; transition:opacity .25s ease; }
+  .send-btn{
+    width:34px; height:34px;
+    border-radius:50%;
+    background:var(--sent);
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+    -webkit-tap-highlight-color: transparent;
+    user-select:none;
+  }
+  .send-btn svg{ width:16px; height:16px; color:var(--sent-text); }
+
+  /* mensaje pendiente de la acción de "enviar" */
+  .row.pending{
+    opacity:0;
+    transform:translateY(14px);
+    transition:opacity .35s ease, transform .35s ease;
+  }
+  .row.pending.sent-in{
+    opacity:1;
+    transform:translateY(0);
+  }
+
+  [data-editable]{
+    outline:none;
+    cursor:text;
+  }
+  [data-editable]:focus{
+    background:rgba(176,141,62,0.12);
+    border-radius:3px;
+  }
+  .back-arrow{ cursor:pointer; }
+
+</style>
+</head>
+<body>
+
+  <div class="phone-screen">
+
+    <!-- status bar -->
+    <div class="status-bar">
+      <span id="clock">9:41</span>
+      <div class="status-icons">
+        <div class="signal-bars"><span></span><span></span><span></span><span></span></div>
+        <svg viewBox="0 0 16 12" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="12">
+          <path d="M8 10.5C8.6 10.5 9.1 10 9.1 9.4C9.1 8.8 8.6 8.3 8 8.3C7.4 8.3 6.9 8.8 6.9 9.4C6.9 10 7.4 10.5 8 10.5Z" fill="#F4F1EA"/>
+          <path d="M5.6 7.4C6.2 6.8 7.1 6.4 8 6.4C8.9 6.4 9.8 6.8 10.4 7.4" stroke="#F4F1EA" stroke-width="1.1" stroke-linecap="round"/>
+          <path d="M3.6 5.2C5 3.9 6.5 3.2 8 3.2C9.5 3.2 11 3.9 12.4 5.2" stroke="#F4F1EA" stroke-width="1.1" stroke-linecap="round"/>
+        </svg>
+        <div class="battery"><i></i></div>
+      </div>
+    </div>
+
+    <!-- header -->
+    <div class="chat-header">
+      <div class="back-arrow" id="backArrow">
+        <svg viewBox="0 0 13 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M11.5 1L1.5 11L11.5 21" stroke="#F4F1EA" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="avatar" data-editable="avatarLetter">R</div>
+      <div class="header-id">
+        <div class="header-name" data-editable="headerName">RabbiShlomo67</div>
+        <div class="header-status" data-editable="headerStatus">online</div>
+      </div>
+      <div class="header-actions">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17 10.5V7.8C17 6.8 16.2 6 15.2 6H4.8C3.8 6 3 6.8 3 7.8V16.2C3 17.2 3.8 18 4.8 18H15.2C16.2 18 17 17.2 17 16.2V13.5L21 17V7L17 10.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        </svg>
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16.5 9.5C16.5 13.6 12.8 17.7 9.4 19.8C9.1 20 8.7 20 8.4 19.8C5.1 17.6 3.3 15.2 3.3 12.5C3.3 10.4 5 8.7 7.1 8.7C8.3 8.7 9.4 9.3 10 10.2C10.6 9.3 11.7 8.7 12.9 8.7" stroke="currentColor" stroke-width="0"/>
+          <path d="M20.5 12.2c.2-2.6-1.6-4.4-3.9-4.4-1.5 0-2.8.8-3.6 2-.8-1.2-2.1-2-3.6-2-2.4 0-4.3 2-3.9 4.6.5 3.4 4.3 6.3 7.5 8.4 3.2-2.1 7-5 7.5-8.6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- chat body -->
+    <div class="chat-body">
+
+      <div class="date-divider" data-editable="dateDivider">Today</div>
+
+      <div class="row in">
+        <div class="bubble received" id="msg-1">
+          <span data-editable="msg1Text">I keep thinking about the Rabbi Loew scroll. Would you trade it for the 18th-century Havdalah tower? It's an incredible piece.</span>
+          <div class="meta">
+            <span class="msg-time" data-editable="msg1Time">4:47 PM</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="row in">
+        <div class="bubble received photo" id="msg-1b">
+          <div class="photo-frame" id="towerPhotoFrame" onclick="document.getElementById('towerPhotoInput').click()">
+            <svg id="towerPlaceholder" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <radialGradient id="bgGlow" cx="50%" cy="38%" r="75%">
+                  <stop offset="0%" stop-color="#F6F3EC"/>
+                  <stop offset="100%" stop-color="#DFD9CB"/>
+                </radialGradient>
+                <linearGradient id="silver" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#9B9B93"/>
+                  <stop offset="18%" stop-color="#E7E6DF"/>
+                  <stop offset="38%" stop-color="#B7B6AC"/>
+                  <stop offset="55%" stop-color="#F2F1EA"/>
+                  <stop offset="75%" stop-color="#9B9B93"/>
+                  <stop offset="100%" stop-color="#75746C"/>
+                </linearGradient>
+                <linearGradient id="silverDark" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#B9B8AF"/>
+                  <stop offset="100%" stop-color="#706F67"/>
+                </linearGradient>
+              </defs>
+
+              <rect x="0" y="0" width="220" height="220" fill="url(#bgGlow)"/>
+
+              <ellipse cx="110" cy="196" rx="44" ry="7" fill="#00000014"/>
+
+              <!-- base -->
+              <path d="M78 190 L142 190 L134 176 L86 176 Z" fill="url(#silverDark)"/>
+              <rect x="90" y="164" width="40" height="14" rx="2" fill="url(#silver)"/>
+              <rect x="97" y="150" width="26" height="16" rx="2" fill="url(#silver)"/>
+
+              <!-- stem -->
+              <rect x="106" y="120" width="8" height="32" fill="url(#silver)"/>
+
+              <!-- lower filigree body -->
+              <path d="M84 118 L136 118 L128 90 L92 90 Z" fill="url(#silver)"/>
+              <g stroke="#burlywood" opacity="0.55">
+                <line x1="94" y1="96" x2="126" y2="96" stroke="#6F6E66" stroke-width="1"/>
+                <line x1="92" y1="104" x2="128" y2="104" stroke="#6F6E66" stroke-width="1"/>
+                <line x1="90" y1="112" x2="130" y2="112" stroke="#6F6E66" stroke-width="1"/>
+                <line x1="98" y1="90" x2="90" y2="118" stroke="#6F6E66" stroke-width="1"/>
+                <line x1="110" y1="90" x2="108" y2="118" stroke="#6F6E66" stroke-width="1"/>
+                <line x1="122" y1="90" x2="130" y2="118" stroke="#6F6E66" stroke-width="1"/>
+              </g>
+
+              <!-- middle collar -->
+              <rect x="88" y="84" width="44" height="8" rx="2" fill="url(#silverDark)"/>
+
+              <!-- mid filigree body (narrower) -->
+              <path d="M92 84 L128 84 L122 56 L98 56 Z" fill="url(#silver)"/>
+              <g opacity="0.55">
+                <line x1="100" y1="62" x2="120" y2="62" stroke="#6F6E66" stroke-width="1"/>
+                <line x1="99" y1="70" x2="121" y2="70" stroke="#6F6E66" stroke-width="1"/>
+                <line x1="97" y1="78" x2="123" y2="78" stroke="#6F6E66" stroke-width="1"/>
+                <line x1="103" y1="56" x2="97" y2="84" stroke="#6F6E66" stroke-width="1"/>
+                <line x1="110" y1="56" x2="109" y2="84" stroke="#6F6E66" stroke-width="1"/>
+                <line x1="117" y1="56" x2="123" y2="84" stroke="#6F6E66" stroke-width="1"/>
+              </g>
+
+              <!-- upper collar -->
+              <rect x="96" y="50" width="28" height="7" rx="2" fill="url(#silverDark)"/>
+
+              <!-- turret roof -->
+              <path d="M100 50 L120 50 L112 24 L108 24 Z" fill="url(#silver)"/>
+              <g opacity="0.5">
+                <line x1="106" y1="46" x2="114" y2="46" stroke="#6F6E66" stroke-width="0.8"/>
+                <line x1="107" y1="38" x2="113" y2="38" stroke="#6F6E66" stroke-width="0.8"/>
+              </g>
+
+              <!-- finial pole + flag -->
+              <rect x="109" y="10" width="2.4" height="16" fill="url(#silverDark)"/>
+              <path d="M111 10 L124 15 L111 20 Z" fill="var(--gold)" fill-opacity="0.9"/>
+              <circle cx="110" cy="9" r="3" fill="url(#silver)"/>
+
+              <!-- small side bells -->
+              <circle cx="86" cy="94" r="3" fill="url(#silver)"/>
+              <circle cx="134" cy="94" r="3" fill="url(#silver)"/>
+              <circle cx="90" cy="62" r="2.4" fill="url(#silver)"/>
+              <circle cx="130" cy="62" r="2.4" fill="url(#silver)"/>
+            </svg>
+            <img id="towerPhotoImg" style="display:none;" alt="Torre de Havdalá">
+            <div class="photo-hint" id="towerPhotoHint">Tap to add photo</div>
+            <div class="img-meta" data-editable="photoTime">4:48 PM</div>
+          </div>
+          <input type="file" id="towerPhotoInput" accept="image/*" style="display:none;">
+        </div>
+      </div>
+
+      <div class="row out">
+        <div class="bubble sent" id="msg-2">
+          <span data-editable="msg2Text">No, that scroll isn't for sale or trade. It's non-negotiable.</span>
+          <div class="meta">
+            <span class="msg-time" data-editable="msg2Time">4:49 PM</span>
+            <span class="checks">
+              <svg viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 5.2L4.4 8.6L10.5 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M5.5 5.2L8.9 8.6L15 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="row in">
+        <div class="bubble received" id="msg-3">
+          <span data-editable="msg3Text">I understand. Still, if you ever change your mind...</span>
+          <div class="meta">
+            <span class="msg-time" data-editable="msg3Time">4:50 PM</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="row out pending" id="msg-4-row">
+        <div class="bubble sent" id="msg-4">
+          <span data-editable="msg4Text">Thanks! As my father used to say, don't sell it, don't lend it, don't lose it.</span>
+          <div class="meta">
+            <span class="msg-time" id="msg-time" data-editable="msg4Time">4:52 PM</span>
+            <span class="checks">
+              <svg viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 5.2L4.4 8.6L10.5 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path id="msg4-check2" d="M5.5 5.2L8.9 8.6L15 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:0; transition:opacity .25s ease;"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- input bar (el botón de enviar dispara la acción) -->
+    <div class="input-bar">
+      <div class="input-pill">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 15.5C13.66 15.5 15 14.16 15 12.5V6.5C15 4.84 13.66 3.5 12 3.5C10.34 3.5 9 4.84 9 6.5V12.5C9 14.16 10.34 15.5 12 15.5Z" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M18 10.5V12.5C18 15.81 15.31 18.5 12 18.5C8.69 18.5 6 15.81 6 12.5V10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M12 18.5V21.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span class="input-placeholder" id="composerPlaceholder" style="display:none;">Message</span>
+        <span class="composer-draft" id="composerDraft" data-editable="composerDraftText">Thanks! As my father used to say, don't sell it, don't lend it, don't lose it.</span>
+      </div>
+      <div class="send-btn" id="sendBtn">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 12L21 4L14 21L11 13L3 12Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="currentColor"/>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Reloj de la barra de estado — cambia aquí la hora que quieras que se vea fija en pantalla
+    document.getElementById('clock').textContent = '9:41';
+
+    // --- Foto de la torre de Havdalá: editable, se queda guardada, y se puede ajustar ---
+    const towerImg = document.getElementById('towerPhotoImg');
+    const towerPlaceholder = document.getElementById('towerPlaceholder');
+    const towerHint = document.getElementById('towerPhotoHint');
+    const towerInput = document.getElementById('towerPhotoInput');
+    const towerFrame = document.getElementById('towerPhotoFrame');
+    const STORAGE_KEY = 'seth-rabbishlomo-tower-photo';
+    const FRAME_SIZE = 210;
+
+    let imgScale = 1, imgX = 0, imgY = 0;
+    let adjustEnabled = false;
+
+    function applyImgTransform(){
+      towerImg.style.transform = 'translate(' + imgX + 'px, ' + imgY + 'px) scale(' + imgScale + ')';
+    }
+
+    function clampPosition(){
+      const maxOffset = Math.max(0, (imgScale - 1) * (FRAME_SIZE / 2));
+      imgX = Math.min(maxOffset, Math.max(-maxOffset, imgX));
+      imgY = Math.min(maxOffset, Math.max(-maxOffset, imgY));
+    }
+
+    function persistPhoto(src){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ src: src, scale: imgScale, x: imgX, y: imgY }));
+    }
+
+    function showSavedPhoto(src, scale, x, y){
+      towerImg.src = src;
+      towerImg.style.display = 'block';
+      towerPlaceholder.style.display = 'none';
+      towerHint.style.display = 'none';
+      imgScale = scale || 1;
+      imgX = x || 0;
+      imgY = y || 0;
+      applyImgTransform();
+      enableAdjust();
+    }
+
+    function enableAdjust(){
+      if (adjustEnabled) return;
+      adjustEnabled = true;
+      towerFrame.removeAttribute('onclick');
+
+      let pointers = new Map();
+      let dragStart = null;
+      let dragMoved = false;
+      let pinchStartDist = null;
+      let pinchStartScale = 1;
+
+      function dist(a, b){
+        return Math.hypot(a.x - b.x, a.y - b.y);
+      }
+
+      towerFrame.addEventListener('pointerdown', function(e){
+        towerFrame.setPointerCapture(e.pointerId);
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size === 1){
+          dragStart = { x: e.clientX, y: e.clientY, startX: imgX, startY: imgY };
+          dragMoved = false;
+        } else if (pointers.size === 2){
+          const pts = Array.from(pointers.values());
+          pinchStartDist = dist(pts[0], pts[1]);
+          pinchStartScale = imgScale;
+        }
+      });
+
+      towerFrame.addEventListener('pointermove', function(e){
+        if (!pointers.has(e.pointerId)) return;
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        if (pointers.size === 1 && dragStart){
+          const dx = e.clientX - dragStart.x;
+          const dy = e.clientY - dragStart.y;
+          if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
+          imgX = dragStart.startX + dx;
+          imgY = dragStart.startY + dy;
+          clampPosition();
+          applyImgTransform();
+        } else if (pointers.size === 2 && pinchStartDist){
+          const pts = Array.from(pointers.values());
+          const newDist = dist(pts[0], pts[1]);
+          imgScale = Math.min(4, Math.max(1, pinchStartScale * (newDist / pinchStartDist)));
+          clampPosition();
+          applyImgTransform();
+          dragMoved = true;
+        }
+      });
+
+      function endPointer(e){
+        pointers.delete(e.pointerId);
+        if (pointers.size === 0){
+          if (!dragMoved) {
+            towerInput.click();
+          } else {
+            persistPhoto(towerImg.src);
+          }
+          dragStart = null;
+          pinchStartDist = null;
+        } else if (pointers.size === 1){
+          // quedó un dedo: reinicia el arrastre desde ahí para que no salte
+          const remaining = Array.from(pointers.entries())[0];
+          dragStart = { x: remaining[1].x, y: remaining[1].y, startX: imgX, startY: imgY };
+          pinchStartDist = null;
+        }
+      }
+
+      towerFrame.addEventListener('pointerup', endPointer);
+      towerFrame.addEventListener('pointercancel', endPointer);
+
+      // doble toque = resetear encuadre (centrado, sin zoom)
+      let lastTap = 0;
+      towerFrame.addEventListener('pointerup', function(e){
+        const now = Date.now();
+        if (now - lastTap < 300 && pointers.size === 0) {
+          imgScale = 1; imgX = 0; imgY = 0;
+          applyImgTransform();
+          persistPhoto(towerImg.src);
+        }
+        lastTap = now;
+      });
+    }
+
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        showSavedPhoto(parsed.src, parsed.scale, parsed.x, parsed.y);
+      } catch (err) {
+        showSavedPhoto(saved, 1, 0, 0); // compatibilidad con guardados antiguos
+      }
+    }
+
+    towerInput.addEventListener('change', function(e){
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt){
+        const dataUrl = evt.target.result;
+        imgScale = 1; imgX = 0; imgY = 0;
+        persistPhoto(dataUrl);
+        showSavedPhoto(dataUrl, 1, 0, 0);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // --- Acción de enviar el último mensaje (Seth) ---
+    const msg4Row = document.getElementById('msg-4-row');
+    const msg4Check2 = document.getElementById('msg4-check2');
+    const composerDraft = document.getElementById('composerDraft');
+    const composerPlaceholder = document.getElementById('composerPlaceholder');
+    const sendBtn = document.getElementById('sendBtn');
+    let messageSent = false;
+    let pressTimer = null;
+    let skipNextClick = false;
+
+    function sendMessage(){
+      if (messageSent) return;
+      messageSent = true;
+
+      // el texto escrito desaparece del campo, vuelve el placeholder
+      composerDraft.style.opacity = '0';
+      setTimeout(function(){
+        composerDraft.style.display = 'none';
+        composerPlaceholder.style.display = 'inline';
+      }, 250);
+
+      // la burbuja aparece en el chat
+      msg4Row.classList.add('sent-in');
+
+      // check simple -> doble check tras un instante (efecto "entregado")
+      setTimeout(function(){
+        msg4Check2.style.opacity = '1';
+      }, 650);
+    }
+
+    function resetScene(){
+      skipNextClick = true;
+      messageSent = false;
+      msg4Row.classList.remove('sent-in');
+      msg4Check2.style.opacity = '0';
+      composerDraft.style.display = 'inline';
+      composerPlaceholder.style.display = 'none';
+      // pequeño delay para que la transición de opacidad se reinicie de forma visible
+      composerDraft.style.opacity = '0';
+      requestAnimationFrame(function(){
+        composerDraft.style.opacity = '1';
+      });
+    }
+
+    // toque normal = enviar; mantener pulsado ~700ms = resetear para repetir toma
+    sendBtn.addEventListener('pointerdown', function(){
+      pressTimer = setTimeout(resetScene, 700);
+    });
+    sendBtn.addEventListener('pointerup', function(){
+      clearTimeout(pressTimer);
+    });
+    sendBtn.addEventListener('pointerleave', function(){
+      clearTimeout(pressTimer);
+    });
+    sendBtn.addEventListener('click', function(){
+      if (skipNextClick) { skipNextClick = false; return; }
+      sendMessage();
+    });
+
+    // la flecha de volver reinicia la escena al principio (para repetir toma)
+    document.getElementById('backArrow').addEventListener('click', function(){
+      resetScene();
+    });
+
+    // --- Todo el texto marcado con data-editable se puede tocar y editar, y se queda guardado ---
+    document.querySelectorAll('[data-editable]').forEach(function(el){
+      el.setAttribute('contenteditable', 'true');
+      el.spellcheck = false;
+      const key = 'seth-rabbishlomo-edit-' + el.dataset.editable;
+      const saved = localStorage.getItem(key);
+      if (saved !== null) el.textContent = saved;
+      el.addEventListener('blur', function(){
+        localStorage.setItem(key, el.textContent);
+      });
+      el.addEventListener('keydown', function(e){
+        if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+      });
+    });
+  </script>
+
+</body>
+</html>
