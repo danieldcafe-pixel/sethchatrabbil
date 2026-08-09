@@ -121,7 +121,8 @@
     z-index:1;
     flex:1;
     padding:14px 12px 10px;
-    overflow:hidden;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
     display:flex;
     flex-direction:column;
   }
@@ -248,7 +249,17 @@
   }
   .input-pill svg{ width:19px; height:19px; color:var(--text-muted); flex-shrink:0; }
   .input-placeholder{ color:var(--text-muted); font-size:15px; }
-  .composer-draft{ color:var(--text-dark); font-size:15px; transition:opacity .25s ease; }
+  .composer-draft{
+    color:var(--text-dark);
+    font-size:15px;
+    outline:none;
+    flex:1;
+    min-width:0;
+  }
+  .composer-draft:empty::before{
+    content:'Message';
+    color:var(--text-muted);
+  }
   .send-btn{
     width:34px; height:34px;
     border-radius:50%;
@@ -430,9 +441,6 @@
       <div class="row in">
         <div class="bubble received" id="msg-1">
           <span data-editable="msg1Text">I keep thinking about the Rabbi Loew scroll. Would you trade it for the 18th-century Havdalah tower? It's an incredible piece.</span>
-          <div class="meta">
-            <span class="msg-time" data-editable="msg1Time">4:47 PM</span>
-          </div>
         </div>
       </div>
 
@@ -519,7 +527,6 @@
             </svg>
             <img id="towerPhotoImg" style="display:none;" alt="Torre de Havdalá">
             <div class="photo-hint" id="towerPhotoHint">Tap to add photo</div>
-            <div class="img-meta" data-editable="photoTime">4:48 PM</div>
           </div>
           <input type="file" id="towerPhotoInput" accept="image/*" style="display:none;">
         </div>
@@ -529,7 +536,6 @@
         <div class="bubble sent" id="msg-2">
           <span data-editable="msg2Text">No, that scroll isn't for sale or trade. It's non-negotiable.</span>
           <div class="meta">
-            <span class="msg-time" data-editable="msg2Time">4:49 PM</span>
             <span class="checks">
               <svg viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M1 5.2L4.4 8.6L10.5 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -543,24 +549,6 @@
       <div class="row in">
         <div class="bubble received" id="msg-3">
           <span data-editable="msg3Text">I understand. Still, if you ever change your mind...</span>
-          <div class="meta">
-            <span class="msg-time" data-editable="msg3Time">4:50 PM</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="row out pending" id="msg-4-row">
-        <div class="bubble sent" id="msg-4">
-          <span data-editable="msg4Text">Thanks! As my father used to say, don't sell it, don't lend it, don't lose it.</span>
-          <div class="meta">
-            <span class="msg-time" id="msg-time" data-editable="msg4Time">4:52 PM</span>
-            <span class="checks">
-              <svg viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M1 5.2L4.4 8.6L10.5 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                <path id="msg4-check2" d="M5.5 5.2L8.9 8.6L15 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:0; transition:opacity .25s ease;"/>
-              </svg>
-            </span>
-          </div>
         </div>
       </div>
 
@@ -574,8 +562,7 @@
           <path d="M18 10.5V12.5C18 15.81 15.31 18.5 12 18.5C8.69 18.5 6 15.81 6 12.5V10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           <path d="M12 18.5V21.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
-        <span class="input-placeholder" id="composerPlaceholder" style="display:none;">Message</span>
-        <span class="composer-draft" id="composerDraft" data-editable="composerDraftText">Thanks! As my father used to say, don't sell it, don't lend it, don't lose it.</span>
+        <span class="composer-draft" id="composerInput" contenteditable="true" spellcheck="false">Thanks! As my father used to say, don't sell it, don't lend it, don't lose it.</span>
       </div>
       <div class="send-btn" id="sendBtn">
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -849,48 +836,50 @@
     avatarFrame.addEventListener('pointerleave', function(){ clearTimeout(avatarPressTimer); });
     avatarFrame.addEventListener('pointercancel', function(){ clearTimeout(avatarPressTimer); });
 
-    // --- Acción de enviar el último mensaje (Seth) ---
-    const msg4Row = document.getElementById('msg-4-row');
-    const msg4Check2 = document.getElementById('msg4-check2');
-    const composerDraft = document.getElementById('composerDraft');
-    const composerPlaceholder = document.getElementById('composerPlaceholder');
+    // --- Acción de enviar: crea un mensaje nuevo con lo que haya escrito en el campo ---
+    const chatBody = document.querySelector('.chat-body');
+    const composerInput = document.getElementById('composerInput');
     const sendBtn = document.getElementById('sendBtn');
-    let messageSent = false;
+    const DEFAULT_DRAFT = "Thanks! As my father used to say, don't sell it, don't lend it, don't lose it.";
     let pressTimer = null;
     let skipNextClick = false;
 
     function sendMessage(){
-      if (messageSent) return;
-      messageSent = true;
+      const text = composerInput.textContent.trim();
+      if (!text) return;
 
-      // el texto escrito desaparece del campo, vuelve el placeholder
-      composerDraft.style.opacity = '0';
+      const row = document.createElement('div');
+      row.className = 'row out pending dynamic-msg';
+      row.innerHTML =
+        '<div class="bubble sent">' +
+          '<span></span>' +
+          '<div class="meta"><span class="checks">' +
+            '<svg viewBox="0 0 16 10" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+              '<path d="M1 5.2L4.4 8.6L10.5 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+              '<path class="check2" d="M5.5 5.2L8.9 8.6L15 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:0; transition:opacity .25s ease;"/>' +
+            '</svg>' +
+          '</span></div>' +
+        '</div>';
+      row.querySelector('span').textContent = text;
+      chatBody.appendChild(row);
+
+      requestAnimationFrame(function(){
+        row.classList.add('sent-in');
+        chatBody.scrollTop = chatBody.scrollHeight;
+      });
+
       setTimeout(function(){
-        composerDraft.style.display = 'none';
-        composerPlaceholder.style.display = 'inline';
-      }, 250);
-
-      // la burbuja aparece en el chat
-      msg4Row.classList.add('sent-in');
-
-      // check simple -> doble check tras un instante (efecto "entregado")
-      setTimeout(function(){
-        msg4Check2.style.opacity = '1';
+        const check2 = row.querySelector('.check2');
+        if (check2) check2.style.opacity = '1';
       }, 650);
+
+      composerInput.textContent = '';
     }
 
     function resetScene(){
       skipNextClick = true;
-      messageSent = false;
-      msg4Row.classList.remove('sent-in');
-      msg4Check2.style.opacity = '0';
-      composerDraft.style.display = 'inline';
-      composerPlaceholder.style.display = 'none';
-      // pequeño delay para que la transición de opacidad se reinicie de forma visible
-      composerDraft.style.opacity = '0';
-      requestAnimationFrame(function(){
-        composerDraft.style.opacity = '1';
-      });
+      document.querySelectorAll('.dynamic-msg').forEach(function(el){ el.remove(); });
+      composerInput.textContent = DEFAULT_DRAFT;
     }
 
     // toque normal = enviar; mantener pulsado ~700ms = resetear para repetir toma
@@ -906,6 +895,9 @@
     sendBtn.addEventListener('click', function(){
       if (skipNextClick) { skipNextClick = false; return; }
       sendMessage();
+    });
+    composerInput.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }
     });
 
     // la flecha de volver reinicia la escena al principio (para repetir toma)
