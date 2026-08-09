@@ -306,6 +306,87 @@
   }
   .phone-screen.edit-mode .edit-banner{ display:flex; }
 
+  .phone-screen.edit-mode .photo-frame,
+  .phone-screen.edit-mode .avatar{
+    cursor:pointer;
+  }
+
+  /* ---------- modal de ajuste de foto ---------- */
+  .adjust-overlay{
+    position:fixed;
+    inset:0;
+    z-index:50;
+    background:rgba(10,14,16,0.75);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .adjust-overlay.open{ display:flex; }
+  .adjust-card{
+    background:var(--header);
+    border-radius:18px;
+    padding:20px 20px 18px;
+    width:100%;
+    max-width:340px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+  }
+  .adjust-title{
+    color:var(--header-text);
+    font-size:15px;
+    font-weight:600;
+  }
+  .adjust-stage{
+    position:relative;
+    width:min(72vw, 280px);
+    height:min(72vw, 280px);
+    border-radius:14px;
+    overflow:hidden;
+    background:#0E1416;
+    touch-action:none;
+  }
+  .adjust-stage.circle{ border-radius:50%; }
+  .adjust-stage img{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    transform-origin:center center;
+  }
+  .adjust-empty{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:rgba(244,241,234,0.45);
+    font-size:13px;
+    text-align:center;
+    padding:0 20px;
+  }
+  .adjust-hint{
+    color:rgba(244,241,234,0.55);
+    font-size:11px;
+    text-align:center;
+  }
+  .adjust-actions{ display:flex; gap:10px; width:100%; }
+  .adjust-btn{
+    flex:1;
+    padding:11px 0;
+    border-radius:10px;
+    border:none;
+    font-size:14px;
+    font-weight:600;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .adjust-btn.secondary{ background:rgba(244,241,234,0.12); color:var(--header-text); }
+  .adjust-btn.primary{ background:var(--gold); color:var(--header); }
+
 </style>
 </head>
 <body>
@@ -505,6 +586,22 @@
 
   </div>
 
+  <!-- modal de ajuste de foto (se abre en grande para poder mover y hacer zoom con comodidad) -->
+  <div class="adjust-overlay" id="adjustOverlay">
+    <div class="adjust-card">
+      <div class="adjust-title" id="adjustTitle">Adjust photo</div>
+      <div class="adjust-stage" id="adjustStage">
+        <img id="adjustStageImg" alt="" style="display:none;">
+        <div class="adjust-empty" id="adjustEmptyHint">No photo yet</div>
+      </div>
+      <div class="adjust-hint">Drag to move · pinch to zoom · double-tap to reset</div>
+      <div class="adjust-actions">
+        <button type="button" class="adjust-btn secondary" id="adjustChangeBtn">Choose Photo</button>
+        <button type="button" class="adjust-btn primary" id="adjustDoneBtn">Done</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const phoneScreen = document.getElementById('phoneScreen');
     let editMode = false;
@@ -518,127 +615,198 @@
       });
     }
 
-    // --- Módulo genérico: foto que se puede elegir, arrastrar y hacer zoom (solo en modo edición) ---
-    function setupAdjustablePhoto(opts){
-      // opts: frame, img, placeholder (opcional), hint (opcional), input, storageKey, frameSize
-      let scale = 1, x = 0, y = 0;
-      let pointers = new Map();
-      let dragStart = null;
-      let dragMoved = false;
-      let pinchStartDist = null;
-      let pinchStartScale = 1;
-      let lastTap = 0;
+    // --- Módulo de foto editable: elegir + ajustar siempre a través del modal grande ---
+    const adjustOverlay = document.getElementById('adjustOverlay');
+    const adjustStage = document.getElementById('adjustStage');
+    const adjustStageImg = document.getElementById('adjustStageImg');
+    const adjustEmptyHint = document.getElementById('adjustEmptyHint');
+    const adjustTitle = document.getElementById('adjustTitle');
+    const adjustChangeBtn = document.getElementById('adjustChangeBtn');
+    const adjustDoneBtn = document.getElementById('adjustDoneBtn');
 
-      function apply(){
-        opts.img.style.transform = 'translate(' + x + 'px, ' + y + 'px) scale(' + scale + ')';
-      }
-      function clamp(){
-        const maxOffset = Math.max(0, (scale - 1) * (opts.frameSize / 2));
-        x = Math.min(maxOffset, Math.max(-maxOffset, x));
-        y = Math.min(maxOffset, Math.max(-maxOffset, y));
-      }
-      function persist(){
-        localStorage.setItem(opts.storageKey, JSON.stringify({ src: opts.img.src, scale: scale, x: x, y: y }));
-      }
-      function show(src, s, xx, yy){
-        opts.img.src = src;
-        opts.img.style.display = 'block';
-        if (opts.placeholder) opts.placeholder.style.display = 'none';
-        if (opts.hint) opts.hint.style.display = 'none';
-        scale = s || 1.25; x = xx || 0; y = yy || 0;
-        apply();
-      }
+    let currentTarget = null;
+    let stageScale = 1.25, stageX = 0, stageY = 0;
+    let stagePointers = new Map();
+    let stageDragStart = null;
+    let stagePinchStartDist = null;
+    let stagePinchStartScale = 1;
+    let stageLastTap = 0;
 
-      const saved = localStorage.getItem(opts.storageKey);
+    function stageDist(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
+
+    function applyStageTransform(){
+      adjustStageImg.style.transform = 'translate(' + stageX + 'px, ' + stageY + 'px) scale(' + stageScale + ')';
+    }
+    function clampStage(){
+      const rect = adjustStage.getBoundingClientRect();
+      const maxOffset = Math.max(0, (stageScale - 1) * (rect.width / 2));
+      stageX = Math.min(maxOffset, Math.max(-maxOffset, stageX));
+      stageY = Math.min(maxOffset, Math.max(-maxOffset, stageY));
+    }
+
+    function makePhotoTarget(cfg){
+      const target = {
+        title: cfg.title,
+        shape: cfg.shape,
+        img: cfg.img,
+        placeholder: cfg.placeholder,
+        hint: cfg.hint,
+        input: cfg.input,
+        storageKey: cfg.storageKey,
+        frameSize: cfg.frameSize,
+        scale: 1.25, x: 0, y: 0,
+        hasPhoto: false,
+        commit: function(src, scale, x, y){
+          cfg.img.src = src;
+          cfg.img.style.display = 'block';
+          if (cfg.placeholder) cfg.placeholder.style.display = 'none';
+          if (cfg.hint) cfg.hint.style.display = 'none';
+          cfg.img.style.transform = 'translate(' + x + 'px, ' + y + 'px) scale(' + scale + ')';
+          this.scale = scale; this.x = x; this.y = y; this.hasPhoto = true;
+          localStorage.setItem(cfg.storageKey, JSON.stringify({ src: src, scale: scale, x: x, y: y }));
+        }
+      };
+
+      const saved = localStorage.getItem(cfg.storageKey);
       if (saved) {
         try {
           const p = JSON.parse(saved);
-          show(p.src, p.scale, p.x, p.y);
+          target.commit(p.src, p.scale || 1.25, p.x || 0, p.y || 0);
         } catch (err) {
-          show(saved, 1.25, 0, 0);
+          target.commit(saved, 1.25, 0, 0);
         }
       }
 
-      opts.input.addEventListener('change', function(e){
+      cfg.frame.addEventListener('click', function(){
+        if (cfg.skipCheck && cfg.skipCheck()) return;
+        if (!isEditModeActive()) return;
+        openAdjuster(target);
+      });
+
+      return target;
+    }
+
+    function openAdjuster(target){
+      currentTarget = target;
+      adjustTitle.textContent = target.title;
+      adjustStage.classList.toggle('circle', target.shape === 'circle');
+
+      if (target.hasPhoto) {
+        adjustStageImg.src = target.img.src;
+        adjustStageImg.style.display = 'block';
+        adjustEmptyHint.style.display = 'none';
+      } else {
+        adjustStageImg.style.display = 'none';
+        adjustEmptyHint.style.display = 'flex';
+      }
+
+      adjustOverlay.classList.add('open');
+      requestAnimationFrame(function(){
+        const rect = adjustStage.getBoundingClientRect();
+        if (target.hasPhoto) {
+          const ratio = rect.width / target.frameSize;
+          stageScale = target.scale || 1.25;
+          stageX = (target.x || 0) * ratio;
+          stageY = (target.y || 0) * ratio;
+        } else {
+          stageScale = 1.25; stageX = 0; stageY = 0;
+        }
+        applyStageTransform();
+      });
+    }
+
+    function closeAdjuster(){
+      adjustOverlay.classList.remove('open');
+      currentTarget = null;
+    }
+
+    adjustChangeBtn.addEventListener('click', function(){
+      if (!currentTarget) return;
+      currentTarget.input.click();
+    });
+
+    adjustDoneBtn.addEventListener('click', function(){
+      if (!currentTarget) return;
+      if (adjustStageImg.style.display === 'none' || !adjustStageImg.src) {
+        closeAdjuster();
+        return;
+      }
+      const rect = adjustStage.getBoundingClientRect();
+      const ratio = currentTarget.frameSize / rect.width;
+      currentTarget.commit(adjustStageImg.src, stageScale, stageX * ratio, stageY * ratio);
+      closeAdjuster();
+    });
+
+    // tocar fuera de la tarjeta cierra sin guardar cambios
+    adjustOverlay.addEventListener('click', function(e){
+      if (e.target === adjustOverlay) closeAdjuster();
+    });
+
+    // arrastrar / pellizcar dentro del escenario grande del modal
+    adjustStage.addEventListener('pointerdown', function(e){
+      adjustStage.setPointerCapture(e.pointerId);
+      stagePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (stagePointers.size === 1){
+        stageDragStart = { x: e.clientX, y: e.clientY, startX: stageX, startY: stageY };
+      } else if (stagePointers.size === 2){
+        const pts = Array.from(stagePointers.values());
+        stagePinchStartDist = stageDist(pts[0], pts[1]);
+        stagePinchStartScale = stageScale;
+      }
+    });
+    adjustStage.addEventListener('pointermove', function(e){
+      if (!stagePointers.has(e.pointerId)) return;
+      stagePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (stagePointers.size === 1 && stageDragStart){
+        stageX = stageDragStart.startX + (e.clientX - stageDragStart.x);
+        stageY = stageDragStart.startY + (e.clientY - stageDragStart.y);
+        clampStage(); applyStageTransform();
+      } else if (stagePointers.size === 2 && stagePinchStartDist){
+        const pts = Array.from(stagePointers.values());
+        const newDist = stageDist(pts[0], pts[1]);
+        stageScale = Math.min(4, Math.max(1, stagePinchStartScale * (newDist / stagePinchStartDist)));
+        clampStage(); applyStageTransform();
+      }
+    });
+    function stageEndPointer(e){
+      stagePointers.delete(e.pointerId);
+      if (stagePointers.size === 1){
+        const remaining = Array.from(stagePointers.entries())[0];
+        stageDragStart = { x: remaining[1].x, y: remaining[1].y, startX: stageX, startY: stageY };
+        stagePinchStartDist = null;
+      } else if (stagePointers.size === 0){
+        stageDragStart = null; stagePinchStartDist = null;
+        const now = Date.now();
+        if (now - stageLastTap < 300) {
+          stageScale = 1.25; stageX = 0; stageY = 0;
+          applyStageTransform();
+        }
+        stageLastTap = now;
+      }
+    }
+    adjustStage.addEventListener('pointerup', stageEndPointer);
+    adjustStage.addEventListener('pointercancel', stageEndPointer);
+
+    // cargar la foto elegida dentro del modal (no se aplica hasta pulsar "Done")
+    function wireFileInput(target){
+      target.input.addEventListener('change', function(e){
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = function(evt){
-          show(evt.target.result, 1.25, 0, 0);
-          persist();
+          adjustStageImg.src = evt.target.result;
+          adjustStageImg.style.display = 'block';
+          adjustEmptyHint.style.display = 'none';
+          stageScale = 1.25; stageX = 0; stageY = 0;
+          applyStageTransform();
         };
         reader.readAsDataURL(file);
       });
-
-      function dist(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
-
-      opts.frame.addEventListener('pointerdown', function(e){
-        if (!isEditModeActive()) return;
-        opts.frame.setPointerCapture(e.pointerId);
-        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (pointers.size === 1){
-          dragStart = { x: e.clientX, y: e.clientY, startX: x, startY: y };
-          dragMoved = false;
-        } else if (pointers.size === 2){
-          const pts = Array.from(pointers.values());
-          pinchStartDist = dist(pts[0], pts[1]);
-          pinchStartScale = scale;
-        }
-      });
-
-      opts.frame.addEventListener('pointermove', function(e){
-        if (!pointers.has(e.pointerId)) return;
-        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (pointers.size === 1 && dragStart){
-          const dx = e.clientX - dragStart.x;
-          const dy = e.clientY - dragStart.y;
-          if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
-          x = dragStart.startX + dx;
-          y = dragStart.startY + dy;
-          clamp(); apply();
-        } else if (pointers.size === 2 && pinchStartDist){
-          const pts = Array.from(pointers.values());
-          const newDist = dist(pts[0], pts[1]);
-          scale = Math.min(4, Math.max(1, pinchStartScale * (newDist / pinchStartDist)));
-          clamp(); apply();
-          dragMoved = true;
-        }
-      });
-
-      function endPointer(e){
-        const wasTracked = pointers.has(e.pointerId);
-        pointers.delete(e.pointerId);
-        if (!isEditModeActive() || !wasTracked) return;
-        if (pointers.size === 0){
-          if (!dragMoved) {
-            opts.input.click();
-          } else {
-            persist();
-          }
-          dragStart = null;
-          pinchStartDist = null;
-        } else if (pointers.size === 1){
-          const remaining = Array.from(pointers.entries())[0];
-          dragStart = { x: remaining[1].x, y: remaining[1].y, startX: x, startY: y };
-          pinchStartDist = null;
-        }
-      }
-      opts.frame.addEventListener('pointerup', endPointer);
-      opts.frame.addEventListener('pointercancel', endPointer);
-
-      // doble toque = resetear encuadre
-      opts.frame.addEventListener('pointerup', function(e){
-        if (!isEditModeActive()) return;
-        const now = Date.now();
-        if (now - lastTap < 300 && pointers.size === 0) {
-          scale = 1.25; x = 0; y = 0;
-          apply(); persist();
-        }
-        lastTap = now;
-      });
     }
 
-    setupAdjustablePhoto({
+    const towerTarget = makePhotoTarget({
+      title: 'Havdalah tower photo',
+      shape: 'square',
       frame: document.getElementById('towerPhotoFrame'),
       img: document.getElementById('towerPhotoImg'),
       placeholder: document.getElementById('towerPlaceholder'),
@@ -647,22 +815,35 @@
       storageKey: 'seth-rabbishlomo-tower-photo',
       frameSize: 210
     });
+    wireFileInput(towerTarget);
 
-    setupAdjustablePhoto({
+    let skipAvatarClick = false;
+
+    const avatarTarget = makePhotoTarget({
+      title: 'RabbiShlomo67 profile photo',
+      shape: 'circle',
       frame: document.getElementById('avatarFrame'),
       img: document.getElementById('avatarPhotoImg'),
       placeholder: document.querySelector('#avatarFrame .avatar-letter'),
       hint: null,
       input: document.getElementById('avatarPhotoInput'),
       storageKey: 'seth-rabbishlomo-avatar-photo',
-      frameSize: 38
+      frameSize: 38,
+      skipCheck: function(){
+        if (skipAvatarClick) { skipAvatarClick = false; return true; }
+        return false;
+      }
     });
+    wireFileInput(avatarTarget);
 
     // --- Punto de entrada al modo edición: mantener pulsado el avatar ---
     const avatarFrame = document.getElementById('avatarFrame');
     let avatarPressTimer = null;
     avatarFrame.addEventListener('pointerdown', function(){
-      avatarPressTimer = setTimeout(function(){ setEditMode(!editMode); }, 700);
+      avatarPressTimer = setTimeout(function(){
+        setEditMode(!editMode);
+        skipAvatarClick = true;
+      }, 700);
     });
     avatarFrame.addEventListener('pointerup', function(){ clearTimeout(avatarPressTimer); });
     avatarFrame.addEventListener('pointerleave', function(){ clearTimeout(avatarPressTimer); });
