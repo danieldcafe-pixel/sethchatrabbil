@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Chat — RabbiShlomo67</title>
 <style>
   :root{
@@ -32,6 +32,7 @@
     position:relative;
     width:100vw;
     height:100vh;
+    height:100dvh;
     margin:0;
     background:var(--bg-chat);
     overflow:hidden;
@@ -56,48 +57,6 @@
     z-index:0;
   }
 
-  /* ---------- status bar ---------- */
-  .status-bar{
-    position:relative;
-    z-index:2;
-    height:47px;
-    flex-shrink:0;
-    background:var(--header);
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    padding:0 22px;
-    color:var(--header-text);
-    font-size:15px;
-    font-weight:600;
-    letter-spacing:0.2px;
-  }
-  .status-icons{ display:flex; align-items:center; gap:6px; }
-  .signal-bars{ display:flex; align-items:flex-end; gap:2px; height:11px; }
-  .signal-bars span{ width:3px; background:var(--header-text); border-radius:1px; }
-  .signal-bars span:nth-child(1){ height:4px; }
-  .signal-bars span:nth-child(2){ height:6px; }
-  .signal-bars span:nth-child(3){ height:8px; }
-  .signal-bars span:nth-child(4){ height:11px; }
-  .battery{
-    width:24px; height:11px;
-    border:1.4px solid var(--header-text);
-    border-radius:3px;
-    position:relative;
-    display:flex;
-    align-items:center;
-    padding:1.5px;
-  }
-  .battery::after{
-    content:"";
-    position:absolute;
-    right:-4px; top:3px;
-    width:2.5px; height:5px;
-    background:var(--header-text);
-    border-radius:0 2px 2px 0;
-  }
-  .battery i{ display:block; width:70%; height:100%; background:var(--header-text); border-radius:1px; }
-
   /* ---------- chat header ---------- */
   .chat-header{
     position:relative;
@@ -107,7 +66,7 @@
     display:flex;
     align-items:center;
     gap:12px;
-    padding:10px 14px 14px 8px;
+    padding:calc(10px + env(safe-area-inset-top, 0px)) 14px 14px 8px;
   }
   .back-arrow{
     width:26px; height:26px;
@@ -272,7 +231,7 @@
     flex-shrink:0;
     background:var(--bg-chat);
     border-top:1px solid rgba(28,43,51,0.08);
-    padding:8px 10px 22px;
+    padding:8px 10px calc(14px + env(safe-area-inset-bottom, 8px));
     display:flex;
     align-items:center;
     gap:10px;
@@ -335,9 +294,6 @@
 
   .edit-banner{
     display:none;
-    position:absolute;
-    top:47px;
-    left:0; right:0;
     z-index:5;
     justify-content:center;
     padding:5px 0;
@@ -355,21 +311,6 @@
 <body>
 
   <div class="phone-screen" id="phoneScreen">
-    <div class="edit-banner">Edit mode — long-press avatar to exit</div>
-
-    <!-- status bar -->
-    <div class="status-bar">
-      <span id="clock">9:41</span>
-      <div class="status-icons">
-        <div class="signal-bars"><span></span><span></span><span></span><span></span></div>
-        <svg viewBox="0 0 16 12" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="12">
-          <path d="M8 10.5C8.6 10.5 9.1 10 9.1 9.4C9.1 8.8 8.6 8.3 8 8.3C7.4 8.3 6.9 8.8 6.9 9.4C6.9 10 7.4 10.5 8 10.5Z" fill="#F4F1EA"/>
-          <path d="M5.6 7.4C6.2 6.8 7.1 6.4 8 6.4C8.9 6.4 9.8 6.8 10.4 7.4" stroke="#F4F1EA" stroke-width="1.1" stroke-linecap="round"/>
-          <path d="M3.6 5.2C5 3.9 6.5 3.2 8 3.2C9.5 3.2 11 3.9 12.4 5.2" stroke="#F4F1EA" stroke-width="1.1" stroke-linecap="round"/>
-        </svg>
-        <div class="battery"><i></i></div>
-      </div>
-    </div>
 
     <!-- header -->
     <div class="chat-header">
@@ -397,6 +338,8 @@
         </svg>
       </div>
     </div>
+
+    <div class="edit-banner">Edit mode — long-press avatar to exit</div>
 
     <!-- chat body -->
     <div class="chat-body">
@@ -563,9 +506,6 @@
   </div>
 
   <script>
-    // Reloj de la barra de estado — cambia aquí la hora que quieras que se vea fija en pantalla
-    document.getElementById('clock').textContent = '9:41';
-
     const phoneScreen = document.getElementById('phoneScreen');
     let editMode = false;
     function isEditModeActive(){ return editMode; }
